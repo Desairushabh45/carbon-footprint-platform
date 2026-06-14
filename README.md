@@ -98,3 +98,5 @@ When a user requests AI tips, EcoTrack aggregates their specific carbon breakdow
 - **Name:** Rushabh Desai
 - **Hackathon:** Virtual PromptWars - Hack2skill
 - **Challenge:** Carbon Footprint Awareness Platform
+- ## 🌐 Live Demo
+👉 https://carbon-footprint-platform-omega.vercel.app/
