@@ -312,6 +312,14 @@ const tipsContainerEl = /** @type {HTMLElement} */ (document.getElementById('tip
 const toastEl = /** @type {HTMLElement} */ (document.getElementById('toast'));
 /** @type {HTMLElement} */
 const historyListEl = /** @type {HTMLElement} */ (document.getElementById('history-list'));
+/** @type {HTMLElement} */
+const impactMetricsEl = /** @type {HTMLElement} */ (document.getElementById('impact-metrics'));
+/** @type {HTMLElement} */
+const worldComparisonEl = /** @type {HTMLElement} */ (document.getElementById('world-comparison'));
+/** @type {HTMLElement} */
+const pledgesSectionEl = /** @type {HTMLElement} */ (document.getElementById('pledges-section'));
+/** @type {HTMLElement} */
+const pledgesContainerEl = /** @type {HTMLElement} */ (document.getElementById('pledges-container'));
 
 // ============================================
 // SECTION 4: UTILITY FUNCTIONS
@@ -741,6 +749,9 @@ function renderResults() {
     batchDOMUpdates([
         () => animateScoreMeter(),
         () => updateComparisonText(),
+        () => renderImpactMetrics(),
+        () => renderComparisonCards(),
+        () => renderPledges(),
         () => {
             if (typeof google !== 'undefined' && google.visualization) {
                 drawEmissionsChart();
@@ -749,6 +760,172 @@ function renderResults() {
             }
         }
     ]);
+}
+
+/**
+ * @description Renders Impact Metrics cards showing equivalencies.
+ */
+function renderImpactMetrics() {
+    if (!impactMetricsEl) return;
+    const total = userData.emissions.total;
+    
+    const trees = Math.round(total * 45);
+    const driving = Math.round(total * 6000);
+    const phones = Math.round(total * 121000);
+    const cost = (total * 15).toFixed(2);
+    
+    impactMetricsEl.innerHTML = `
+        <div class="metric-card">
+            <div class="metric-icon">🌳</div>
+            <div class="metric-value">${trees.toLocaleString()}</div>
+            <div class="metric-label">Trees needed to offset (yr)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">🚗</div>
+            <div class="metric-value">${driving.toLocaleString()} km</div>
+            <div class="metric-label">Equivalent driving/year</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">📱</div>
+            <div class="metric-value">${phones.toLocaleString()}</div>
+            <div class="metric-label">Smartphones charged</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">💰</div>
+            <div class="metric-value">$${cost}</div>
+            <div class="metric-label">Carbon cost/year</div>
+        </div>
+    `;
+}
+
+/**
+ * @description Renders Comparison Cards against benchmarks.
+ */
+function renderComparisonCards() {
+    if (!worldComparisonEl) return;
+    const total = userData.emissions.total;
+    
+    const benchmarks = [
+        { name: "India Average", target: 1.9 },
+        { name: "Global Average", target: 4.7 },
+        { name: "Paris Target", target: 2.0 },
+        { name: "USA Average", target: 14.2 }
+    ];
+    
+    let html = '';
+    benchmarks.forEach(bm => {
+        const diff = total - bm.target;
+        const absDiff = Math.abs(diff).toFixed(1);
+        const isAbove = diff > 0;
+        
+        let iconHtml = '';
+        let classHtml = '';
+        if (Math.abs(diff) < 0.1) {
+            iconHtml = '<i class="fa-solid fa-equals"></i>';
+            classHtml = 'average';
+        } else if (isAbove) {
+            iconHtml = '<i class="fa-solid fa-arrow-up"></i>';
+            classHtml = 'above';
+        } else {
+            iconHtml = '<i class="fa-solid fa-arrow-down"></i>';
+            classHtml = 'below';
+        }
+        
+        html += `
+            <div class="comparison-card">
+                <div class="metric-label">${bm.name} (${bm.target.toFixed(1)} t)</div>
+                <div class="comp-value">${total.toFixed(1)} t</div>
+                <div class="comp-diff ${classHtml}">
+                    ${iconHtml} ${absDiff} t
+                </div>
+            </div>
+        `;
+    });
+    
+    worldComparisonEl.innerHTML = html;
+}
+
+/**
+ * @description Renders Actionable Pledges.
+ */
+function renderPledges() {
+    if (!pledgesContainerEl || !pledgesSectionEl) return;
+    
+    pledgesSectionEl.classList.remove('hidden');
+    let html = '';
+    
+    // 1. Car reduction
+    if (userData.carKm > 0) {
+        const carSave = (userData.emissions.car * 0.20).toFixed(2);
+        html += `
+            <div class="pledge-card" onclick="togglePledge(this)">
+                <div class="pledge-header">
+                    <div class="pledge-checkbox"></div>
+                    <div>I will reduce car usage by 20%</div>
+                </div>
+                <div class="pledge-saving">-${carSave} tons CO₂/yr</div>
+                <div class="pledge-message">Walk, bike, or use transit.</div>
+            </div>
+        `;
+    }
+    
+    // 2. Diet change
+    if (userData.diet === 'meat-eater') {
+        const dietSave = (userData.emissions.diet - 1.7).toFixed(2);
+        if (parseFloat(dietSave) > 0) {
+            html += `
+                <div class="pledge-card" onclick="togglePledge(this)">
+                    <div class="pledge-header">
+                        <div class="pledge-checkbox"></div>
+                        <div>I will switch to vegetarian diet</div>
+                    </div>
+                    <div class="pledge-saving">-${dietSave} tons CO₂/yr</div>
+                    <div class="pledge-message">Plant-based meals save water and emissions.</div>
+                </div>
+            `;
+        }
+    }
+    
+    // 3. Renewable energy
+    if (userData.electricity > 0) {
+        const elecSave = (userData.emissions.electricity * 0.80).toFixed(2);
+        html += `
+            <div class="pledge-card" onclick="togglePledge(this)">
+                <div class="pledge-header">
+                    <div class="pledge-checkbox"></div>
+                    <div>I will use renewable energy</div>
+                </div>
+                <div class="pledge-saving">-${elecSave} tons CO₂/yr</div>
+                <div class="pledge-message">Switch to solar or green energy plans.</div>
+            </div>
+        `;
+    }
+    
+    if (html === '') {
+        html = '<div class="empty-state">You are already doing great! Keep it up.</div>';
+    }
+    
+    pledgesContainerEl.innerHTML = html;
+}
+
+/**
+ * @description Toggles pledge selection and shows confetti.
+ * @param {HTMLElement} element 
+ */
+function togglePledge(element) {
+    const isActive = element.classList.contains('active');
+    if (!isActive) {
+        element.classList.add('active');
+        if (typeof /** @type {any} */ (window).confetti === 'function') {
+            /** @type {any} */ (window).confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        }
+    } else {
+        element.classList.remove('active');
+    }
 }
 
 /**

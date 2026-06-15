@@ -23,6 +23,9 @@ EcoTrack is a comprehensive, interactive web application designed to help indivi
 - **Goal:** Help individuals understand, track, and reduce their carbon footprint through simple actions and personalized AI insights.
 
 ## ✨ Features
+- 🌍 **Impact Metrics:** View real-world equivalencies like trees needed and smartphones charged.
+- 🆚 **Global Comparison:** Compare your carbon footprint to India, USA, global averages, and Paris targets.
+- 🌱 **Actionable Pledges:** Take interactive pledges to reduce emissions with instant impact estimates and confetti celebrations.
 - 🧮 **Carbon footprint calculator:** Granular inputs for car travel, flights, electricity, and diet.
 - 📊 **Google Pie Chart visualization:** Beautiful, interactive breakdown of emissions.
 - 🧠 **AI-powered personalized tips:** Deep integration with the Gemini API for smart recommendations.
