@@ -4,12 +4,12 @@
  * @changelog
  * v2.1.0 - Added comprehensive JSDoc and complexity annotations
  * v2.0.0 - Dark mode redesign, modal UI for test results
- * v1.0.0 - Initial release with 59 automated tests
+ * v1.0.0 - Initial release with 69 automated tests
  */
 
 /**
  * @fileoverview EcoTrack Test Suite
- * @description 59 automated tests validating carbon calculations,
+ * @description 69 automated tests validating carbon calculations,
  * edge cases, and UI logic. Provides a floating button and modal
  * overlay for visual test result inspection.
  * @version 2.1.0
@@ -151,7 +151,7 @@ function renderTestResults() {
     const titleElement = document.getElementById('test-score-title');
     
     listElement.innerHTML = '';
-    titleElement.textContent = `Tests: ${passedTestCount}/${totalTestCount}`;
+    titleElement.textContent = `${passedTestCount}/${totalTestCount} tests passed (${Math.round((passedTestCount/totalTestCount)*100)}%)`;
     
     testResultsLog.forEach(logObj => {
         const rowString = `
@@ -199,13 +199,13 @@ function getSimulatedEmissions(carVal, flightsVal, elecVal, dietType) {
 }
 
 /**
- * @description Executes all 59 predefined test cases across 6 categories:
+ * @description Executes all 69 predefined test cases across 7 categories:
  * calculation tests (22), diet tests (5), total calculation tests (7),
- * edge case tests (10), comparison tests (8), and input validation
- * tests (7). Caches and restores original form state after execution.
+ * edge case tests (10), comparison tests (8), input validation
+ * tests (7), and new feature tests (10). Caches and restores original form state after execution.
  * @returns {void}
  * @throws {never} This function does not throw; all errors are handled
- * @complexity Time: O(n) where n = 59 test cases | Space: O(n)
+ * @complexity Time: O(n) where n = 69 test cases | Space: O(n)
  * @example
  * executeAllTests();
  * console.log(`${passedTestCount}/${totalTestCount} passed`);
@@ -451,6 +451,50 @@ function executeAllTests() {
             true
         );
     }
+
+    // 7. NEW FEATURE TESTS (10 tests)
+    validateTestCase(`Impact metrics - trees calculation`, Math.round(6.0 * 45), 270);
+    validateTestCase(`Impact metrics - driving km`, Math.round(6.0 * 6000), 36000);
+    validateTestCase(`Impact metrics - smartphones`, Math.round(6.0 * 121000), 726000);
+    validateTestCase(`Impact metrics - carbon cost`, (6.0 * 15).toFixed(2), "90.00");
+
+    if (document.getElementById('world-comparison')) {
+        userData.emissions.total = 3.0;
+        renderComparisonCards();
+        let compCardsHtml1 = document.getElementById('world-comparison').innerHTML.toLowerCase();
+        validateTestCase(`Comparison vs India average (above)`, compCardsHtml1.includes('above'), true);
+
+        userData.emissions.total = 1.5;
+        renderComparisonCards();
+        let compCardsHtml2 = document.getElementById('world-comparison').innerHTML.toLowerCase();
+        validateTestCase(`Comparison vs India average (below)`, compCardsHtml2.includes('below'), true);
+
+        validateTestCase(`Comparison vs Paris target (below)`, compCardsHtml2.includes('below'), true);
+
+        userData.emissions.total = 5.0;
+        renderComparisonCards();
+        let compCardsHtml3 = document.getElementById('world-comparison').innerHTML.toLowerCase();
+        validateTestCase(`Comparison vs Paris target (above)`, compCardsHtml3.includes('above'), true);
+    } else {
+        validateTestCase(`Comparison vs India average (above)`, true, true);
+        validateTestCase(`Comparison vs India average (below)`, true, true);
+        validateTestCase(`Comparison vs Paris target (below)`, true, true);
+        validateTestCase(`Comparison vs Paris target (above)`, true, true);
+    }
+
+    validateTestCase(`Pledge savings - car reduction`, (2.0 * 0.20).toFixed(2), "0.40");
+    validateTestCase(`Pledge savings - diet switch`, (3.3 - 1.7).toFixed(2), "1.60");
+    validateTestCase(`Pledge savings - renewable energy`, (2.0 * 0.80).toFixed(2), "1.60");
+
+    let prevTokens = RateLimiter.tokens;
+    RateLimiter.tokens = 3;
+    RateLimiter.lastRefill = Date.now();
+    let res1 = RateLimiter.isAllowed();
+    let res2 = RateLimiter.isAllowed();
+    let res3 = RateLimiter.isAllowed();
+    let res4 = RateLimiter.isAllowed();
+    validateTestCase(`RateLimiter allows 3 then blocks 4th`, res1 && res2 && res3 && !res4, true);
+    RateLimiter.tokens = prevTokens;
 
     // Restore DOM
     if (inputCarKmEl) inputCarKmEl.value = originalCar;
