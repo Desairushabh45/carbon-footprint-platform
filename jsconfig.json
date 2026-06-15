@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "target": "es2022",
+    "lib": ["dom", "dom.iterable", "es2022", "webworker"]
+  },
+  "include": ["**/*.js", "global.d.ts"],
+  "exclude": ["node_modules", "jspdf.js", "**/*jspdf*"]
+}

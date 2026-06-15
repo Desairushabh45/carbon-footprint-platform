@@ -621,3 +621,20 @@ select option {
         font-size: 3rem;
     }
 }
+
+/* Input Error Validation */
+.input-error {
+    border: 2px solid #ef4444 !important;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3) !important;
+}
+
+.error-message {
+    color: #ef4444;
+    font-size: 0.8rem;
+    margin-top: 4px;
+    display: none;
+}
+
+.error-message.visible {
+    display: block;
+}

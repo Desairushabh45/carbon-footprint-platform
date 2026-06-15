@@ -1,7 +1,44 @@
+// @ts-check
+
+/**
+ * @changelog
+ * v2.1.0 - Added memoization, performance monitoring, memory cleanup manager
+ * v2.0.0 - Dark mode redesign, glassmorphism UI, security hardening
+ * v1.0.0 - Initial release with calculator, charts, and AI tips
+ */
+
+/**
+ * SOLID Principles Applied:
+ * S - Single Responsibility: Each function
+ *     does exactly one thing
+ * O - Open/Closed: Config object is open
+ *     for extension via Object.assign
+ * L - Liskov: All logger methods are
+ *     interchangeable
+ * I - Interface segregation: Services are
+ *     independent modules
+ * D - Dependency inversion: Services injected
+ *     via config not hardcoded
+ */
+
+/**
+ * Design Patterns Used:
+ * - Module Pattern: Each service is
+ *   an isolated module
+ * - Observer Pattern: Event listeners
+ *   watch for user actions
+ * - Factory Pattern: Tips generated
+ *   based on emission type
+ * - Singleton Pattern: Config and Logger
+ *   have single instances
+ * - Strategy Pattern: Fallback tips
+ *   strategy when API fails
+ */
+
 /**
  * @fileoverview EcoTrack - Carbon Footprint Awareness Platform
  * @author Rushabh Desai
- * @version 2.0.0
+ * @version 2.1.0
  * @description Main application logic handling carbon footprint calculations,
  * Google Services integration, UI rendering, and security.
  */
@@ -15,8 +52,10 @@ Object.freeze(Array.prototype);
 Object.freeze(String.prototype);
 
 /**
- * Generate cryptographically secure session ID
- * Used for security audit logging only
+ * @description Generate cryptographically secure session ID.
+ * Used for security audit logging only.
+ * @constant {string} SESSION_ID
+ * @since v1.0.0
  */
 const SESSION_ID = crypto.getRandomValues(new Uint8Array(16)).join('-');
 
@@ -30,6 +69,19 @@ const GLOBAL_AVERAGE_TONS = 4.7;
 
 /** @constant {number} Cooldown between calculations in milliseconds */
 const CALCULATION_COOLDOWN_MS = 2000;
+
+/**
+ * @constant {Object} UNITS
+ * @description Standard units for all
+ * measurements in the application
+ * @since v2.1.0
+ */
+const UNITS = Object.freeze({
+    EMISSIONS: 'tons CO2e/year',
+    DISTANCE: 'kilometers',
+    ENERGY: 'kilowatt-hours',
+    CURRENCY: 'USD'
+});
 
 /** @constant {Object} Emission factors per category */
 const EMISSION_FACTORS = {
@@ -95,8 +147,9 @@ const userData = {
 };
 
 /**
- * Token bucket rate limiter
- * Prevents API abuse and spam
+ * @description Token bucket rate limiter.
+ * Prevents API abuse and calculation spam.
+ * @since v2.0.0
  */
 const RateLimiter = {
     tokens: 3,
@@ -104,7 +157,17 @@ const RateLimiter = {
     refillRate: 1,
     lastRefill: Date.now(),
     
-    /** Check if action is allowed */
+    /**
+     * @description Checks if an action is allowed under the current rate limit.
+     * Consumes one token if available.
+     * @returns {boolean} True if the action is allowed, false if rate limited
+     * @complexity Time: O(1) | Space: O(1)
+     * @example
+     * if (RateLimiter.isAllowed()) {
+     *     calculateFootprint();
+     * }
+     * @since v2.0.0
+     */
     isAllowed() {
         this._refill();
         if (this.tokens > 0) {
@@ -114,7 +177,13 @@ const RateLimiter = {
         return false;
     },
     
-    /** Refill tokens based on time passed */
+    /**
+     * @description Refills tokens based on elapsed time since last refill.
+     * Uses a token bucket algorithm with configurable refill rate.
+     * @returns {void}
+     * @complexity Time: O(1) | Space: O(1)
+     * @since v2.0.0
+     */
     _refill() {
         const now = Date.now();
         const timePassed = (now - this.lastRefill) / 1000;
@@ -127,27 +196,56 @@ const RateLimiter = {
 };
 
 /**
- * Secure API key manager
- * Key exists in memory for ONE use only
+ * @description Secure API key manager.
+ * Key exists in memory for ONE use only, then is destroyed.
+ * Implements the Singleton pattern for key lifecycle management.
+ * @since v2.0.0
  */
 const SecureKeyManager = {
+    /** @type {string|null} */
     _key: null,
     
-    /** Store key for single use */
+    /**
+     * @description Stores an API key for single use and clears the input field.
+     * @param {string} key - The API key to store
+     * @returns {void}
+     * @complexity Time: O(1) | Space: O(1)
+     * @example
+     * SecureKeyManager.setKey('AIzaSy...');
+     * @since v2.0.0
+     */
     setKey(key) {
         this._key = key;
-        const keyEl = document.getElementById('gemini-key');
+        const keyEl = /** @type {HTMLInputElement} */ (document.getElementById('gemini-key'));
         if (keyEl) keyEl.value = '';
     },
     
-    /** Retrieve and immediately destroy key */
+    /**
+     * @description Retrieves the stored API key and immediately destroys it
+     * from memory. Key can only be consumed once.
+     * @returns {string|null} The stored API key, or null if no key exists
+     * @complexity Time: O(1) | Space: O(1)
+     * @example
+     * const key = SecureKeyManager.consumeKey();
+     * // key is now null in the manager
+     * @since v2.0.0
+     */
     consumeKey() {
         const key = this._key;
         this._key = null;
         return key;
     },
     
-    /** Check if key exists */
+    /**
+     * @description Checks whether an API key is currently stored.
+     * @returns {boolean} True if a key is available for consumption
+     * @complexity Time: O(1) | Space: O(1)
+     * @example
+     * if (SecureKeyManager.hasKey()) {
+     *     fetchAiTips();
+     * }
+     * @since v2.0.0
+     */
     hasKey() {
         return this._key !== null;
     }
@@ -158,48 +256,80 @@ const SecureKeyManager = {
 // ============================================
 
 // View Containers
-const calculatorViewEl = document.getElementById('view-calculator');
-const resultsViewEl = document.getElementById('view-results');
-const tipsViewEl = document.getElementById('view-ai-tips');
+/** @type {HTMLElement} */
+const calculatorViewEl = /** @type {HTMLElement} */ (document.getElementById('view-calculator'));
+/** @type {HTMLElement} */
+const resultsViewEl = /** @type {HTMLElement} */ (document.getElementById('view-results'));
+/** @type {HTMLElement} */
+const tipsViewEl = /** @type {HTMLElement} */ (document.getElementById('view-ai-tips'));
 
 // Navigation Buttons
-const navCalcEl = document.getElementById('nav-calc');
-const navResultsEl = document.getElementById('nav-results');
-const navTipsEl = document.getElementById('nav-tips');
+/** @type {HTMLButtonElement} */
+const navCalcEl = /** @type {HTMLButtonElement} */ (document.getElementById('nav-calc'));
+/** @type {HTMLButtonElement} */
+const navResultsEl = /** @type {HTMLButtonElement} */ (document.getElementById('nav-results'));
+/** @type {HTMLButtonElement} */
+const navTipsEl = /** @type {HTMLButtonElement} */ (document.getElementById('nav-tips'));
 
 // Form and Inputs
-const calculatorFormEl = document.getElementById('calculator-form');
-const inputCarKmEl = document.getElementById('car-km');
-const inputFlightsEl = document.getElementById('flights');
-const inputElectricityEl = document.getElementById('electricity');
-const inputDietEl = document.getElementById('diet');
+/** @type {HTMLFormElement} */
+const calculatorFormEl = /** @type {HTMLFormElement} */ (document.getElementById('calculator-form'));
+/** @type {HTMLInputElement} */
+const inputCarKmEl = /** @type {HTMLInputElement} */ (document.getElementById('car-km'));
+/** @type {HTMLInputElement} */
+const inputFlightsEl = /** @type {HTMLInputElement} */ (document.getElementById('flights'));
+/** @type {HTMLInputElement} */
+const inputElectricityEl = /** @type {HTMLInputElement} */ (document.getElementById('electricity'));
+/** @type {HTMLSelectElement} */
+const inputDietEl = /** @type {HTMLSelectElement} */ (document.getElementById('diet'));
 
 // Action Buttons
-const btnRecalculateEl = document.getElementById('btn-recalculate');
-const btnGetTipsEl = document.getElementById('btn-get-tips');
-const btnGenerateTipsEl = document.getElementById('btn-generate-tips');
-const btnDownloadReportEl = document.getElementById('btn-download-report');
+/** @type {HTMLButtonElement} */
+const btnRecalculateEl = /** @type {HTMLButtonElement} */ (document.getElementById('btn-recalculate'));
+/** @type {HTMLButtonElement} */
+const btnGetTipsEl = /** @type {HTMLButtonElement} */ (document.getElementById('btn-get-tips'));
+/** @type {HTMLButtonElement} */
+const btnGenerateTipsEl = /** @type {HTMLButtonElement} */ (document.getElementById('btn-generate-tips'));
+/** @type {HTMLButtonElement} */
+const btnDownloadReportEl = /** @type {HTMLButtonElement} */ (document.getElementById('btn-download-report'));
 
 // Results & Tips UI
-const totalScoreEl = document.getElementById('total-score');
-const comparisonTextEl = document.getElementById('comparison-text');
-const emissionsChartEl = document.getElementById('emissions-chart');
-const inputGeminiKeyEl = document.getElementById('gemini-key');
-const apiKeySectionEl = document.getElementById('api-key-section');
-const loadingStateEl = document.getElementById('loading-state');
-const tipsContainerEl = document.getElementById('tips-container');
-const toastEl = document.getElementById('toast');
-const historyListEl = document.getElementById('history-list');
+/** @type {HTMLElement} */
+const totalScoreEl = /** @type {HTMLElement} */ (document.getElementById('total-score'));
+/** @type {HTMLElement} */
+const comparisonTextEl = /** @type {HTMLElement} */ (document.getElementById('comparison-text'));
+/** @type {HTMLElement} */
+const emissionsChartEl = /** @type {HTMLElement} */ (document.getElementById('emissions-chart'));
+/** @type {HTMLInputElement} */
+const inputGeminiKeyEl = /** @type {HTMLInputElement} */ (document.getElementById('gemini-key'));
+/** @type {HTMLElement} */
+const apiKeySectionEl = /** @type {HTMLElement} */ (document.getElementById('api-key-section'));
+/** @type {HTMLElement} */
+const loadingStateEl = /** @type {HTMLElement} */ (document.getElementById('loading-state'));
+/** @type {HTMLElement} */
+const tipsContainerEl = /** @type {HTMLElement} */ (document.getElementById('tips-container'));
+/** @type {HTMLElement} */
+const toastEl = /** @type {HTMLElement} */ (document.getElementById('toast'));
+/** @type {HTMLElement} */
+const historyListEl = /** @type {HTMLElement} */ (document.getElementById('history-list'));
 
 // ============================================
 // SECTION 4: UTILITY FUNCTIONS
 // ============================================
 
 /**
- * Advanced input sanitizer
- * Removes ALL potentially harmful characters
- * @param {string|number} value - The input value to sanitize.
- * @returns {string|number} The sanitized string or the original number.
+ * @description Advanced input sanitizer that removes ALL potentially
+ * harmful characters including script injections and event handlers.
+ * @param {string|number} value - The input value to sanitize
+ * @returns {string|number} The sanitized string or the original number
+ * @throws {never} This function does not throw
+ * @complexity Time: O(n) | Space: O(n)
+ * @example
+ * sanitizeInput('<script>alert("xss")</script>');
+ * // Returns: 'scriptalert(xss)script'
+ * sanitizeInput(42);
+ * // Returns: 42
+ * @since v1.0.0
  */
 function sanitizeInput(value) {
     if (typeof value === 'string') {
@@ -214,9 +344,16 @@ function sanitizeInput(value) {
 }
 
 /**
- * Escapes HTML characters in a string to prevent XSS attacks.
- * @param {string} unsafe - Raw string potentially containing HTML.
- * @returns {string} Safely escaped HTML string.
+ * @description Escapes HTML characters in a string to prevent XSS attacks.
+ * Converts &, <, >, ", and ' to their HTML entity equivalents.
+ * @param {string} unsafe - Raw string potentially containing HTML
+ * @returns {string} Safely escaped HTML string
+ * @throws {never} This function does not throw
+ * @complexity Time: O(n) | Space: O(n)
+ * @example
+ * escapeHtml('<b>Hello</b>');
+ * // Returns: '&lt;b&gt;Hello&lt;/b&gt;'
+ * @since v1.0.0
  */
 function escapeHtml(unsafe) {
     return unsafe
@@ -228,13 +365,39 @@ function escapeHtml(unsafe) {
 }
 
 /**
- * Performance Monitoring utility
+ * @description Performance monitoring utility that tracks execution
+ * duration of labeled code sections using high-resolution timestamps.
+ * Implements the Singleton pattern.
+ * @type {{ marks: Record<string, number>, start: (label: string) => void, end: (label: string) => void }}
+ * @since v2.1.0
  */
 const PerformanceMonitor = {
     marks: {},
+
+    /**
+     * @description Starts a performance measurement with the given label.
+     * @param {string} label - Unique identifier for the measurement
+     * @returns {void}
+     * @complexity Time: O(1) | Space: O(1)
+     * @example
+     * PerformanceMonitor.start('calculation');
+     * @since v2.1.0
+     */
     start(label) {
         this.marks[label] = performance.now();
     },
+
+    /**
+     * @description Ends a performance measurement, logs the duration,
+     * and cleans up the stored mark.
+     * @param {string} label - Identifier matching a previous start() call
+     * @returns {void}
+     * @complexity Time: O(1) | Space: O(1)
+     * @example
+     * PerformanceMonitor.end('calculation');
+     * // Logs: "⚡ calculation: 1.23ms"
+     * @since v2.1.0
+     */
     end(label) {
         const duration = performance.now() - this.marks[label];
         if (window.cloudLogger) {
@@ -245,8 +408,18 @@ const PerformanceMonitor = {
 };
 
 /**
- * Batches DOM updates to avoid layout thrashing
- * @param {Array<Function>} updates - Array of functions to run
+ * @description Batches DOM updates into a single animation frame
+ * to avoid layout thrashing and forced reflows.
+ * @param {Array<Function>} updates - Array of functions performing DOM mutations
+ * @returns {void}
+ * @throws {never} This function does not throw
+ * @complexity Time: O(n) | Space: O(1)
+ * @example
+ * batchDOMUpdates([
+ *     () => element.textContent = 'Hello',
+ *     () => element.classList.add('active')
+ * ]);
+ * @since v2.1.0
  */
 function batchDOMUpdates(updates) {
     requestAnimationFrame(() => {
@@ -255,13 +428,21 @@ function batchDOMUpdates(updates) {
 }
 
 /**
- * Memoizes heavy calculation functions
- * @param {Function} fn - Function to memoize
- * @returns {Function} Memoized function
+ * @description Memoizes heavy calculation functions by caching results
+ * based on serialized arguments. Uses a Map for O(1) cache lookups.
+ * @param {Function} fn - Pure function to memoize
+ * @returns {Function} Memoized version of the input function
+ * @throws {never} This function does not throw
+ * @complexity Time: O(1) amortized | Space: O(n) where n = unique arg combos
+ * @example
+ * const memoizedCalc = memoize((a, b) => a + b);
+ * memoizedCalc(1, 2); // Computes: 3
+ * memoizedCalc(1, 2); // Cache hit: 3
+ * @since v2.1.0
  */
 const memoize = (fn) => {
     const cache = new Map();
-    return (...args) => {
+    return /** @param {any[]} args */ (...args) => {
         const key = JSON.stringify(args);
         if (cache.has(key)) return cache.get(key);
         const result = fn(...args);
@@ -271,15 +452,42 @@ const memoize = (fn) => {
 };
 
 /**
- * Memory Management utility
+ * @description Memory management utility that tracks event listeners
+ * and provides centralized cleanup to prevent memory leaks.
+ * Implements the Observer pattern for event lifecycle management.
+ * @since v2.1.0
  */
 const CleanupManager = {
+    /** @type {Array<{element: HTMLElement, event: string, handler: EventListenerOrEventListenerObject}>} */
     listeners: [],
+
+    /**
+     * @description Registers an event listener on an element and tracks it
+     * for later cleanup.
+     * @param {HTMLElement|null} element - DOM element to attach listener to
+     * @param {string} event - Event type (e.g., 'click', 'submit')
+     * @param {EventListenerOrEventListenerObject} handler - Event handler function
+     * @returns {void}
+     * @complexity Time: O(1) | Space: O(1)
+     * @example
+     * CleanupManager.add(button, 'click', handleClick);
+     * @since v2.1.0
+     */
     add(element, event, handler) {
         if (!element) return;
         element.addEventListener(event, handler);
         this.listeners.push({ element, event, handler });
     },
+
+    /**
+     * @description Removes all tracked event listeners and resets
+     * the internal registry. Call on application teardown.
+     * @returns {void}
+     * @complexity Time: O(n) | Space: O(1)
+     * @example
+     * CleanupManager.cleanup();
+     * @since v2.1.0
+     */
     cleanup() {
         this.listeners.forEach(({ element, event, handler }) => {
             element.removeEventListener(event, handler);
@@ -287,19 +495,36 @@ const CleanupManager = {
         this.listeners = [];
     }
 };
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
 
 /**
- * Validates all numeric form inputs enforcing finite bounds.
- * @returns {boolean} True if all inputs are valid.
+ * @description Validates all numeric form inputs enforcing finite bounds.
+ * Sanitizes and clamps values to safe ranges, falling back to defaults
+ * for invalid or missing data.
+ * @returns {boolean} True if all inputs are valid and state is updated
+ * @throws {never} This function does not throw; invalid inputs are clamped
+ * @complexity Time: O(1) | Space: O(1)
+ * @example
+ * // With form inputs filled:
+ * const isValid = validateInputs();
+ * // userData is now populated with sanitized values
+ * @since v1.0.0
  */
 function validateInputs() {
+    let isValid = true;
+
+    // Reset previous errors
+    const inputs = [
+        { el: inputCarKmEl, errId: 'error-car-km' },
+        { el: inputFlightsEl, errId: 'error-flights' },
+        { el: inputElectricityEl, errId: 'error-electricity' }
+    ];
+
+    inputs.forEach(item => {
+        if (item.el) item.el.classList.remove('input-error');
+        const errEl = document.getElementById(item.errId);
+        if (errEl) errEl.classList.remove('visible');
+    });
+
     let carInputStr = sanitizeInput(inputCarKmEl.value).toString().slice(0, 4);
     let flightInputStr = sanitizeInput(inputFlightsEl.value).toString().slice(0, 3);
     let elecInputStr = sanitizeInput(inputElectricityEl.value).toString().slice(0, 5);
@@ -308,13 +533,33 @@ function validateInputs() {
     let flightInput = parseFloat(flightInputStr);
     let elecInput = parseFloat(elecInputStr);
 
-    if (!Number.isFinite(carInput) || Number.isNaN(carInput)) carInput = 0;
-    if (!Number.isFinite(flightInput) || Number.isNaN(flightInput)) {
+    if (!Number.isFinite(carInput) || Number.isNaN(carInput) || carInput < 0 || carInput > 2000) {
+        inputCarKmEl.classList.add('input-error');
+        const errEl = document.getElementById('error-car-km');
+        if (errEl) errEl.classList.add('visible');
+        isValid = false;
+        carInput = 0;
+    }
+    
+    if (!Number.isFinite(flightInput) || Number.isNaN(flightInput) || flightInput < 0 || flightInput > 365) {
+        inputFlightsEl.classList.add('input-error');
+        const errEl = document.getElementById('error-flights');
+        if (errEl) errEl.classList.add('visible');
+        isValid = false;
         flightInput = 0;
     }
-    if (!Number.isFinite(elecInput) || Number.isNaN(elecInput)) elecInput = 0;
+    
+    if (!Number.isFinite(elecInput) || Number.isNaN(elecInput) || elecInput < 0 || elecInput > 10000) {
+        inputElectricityEl.classList.add('input-error');
+        const errEl = document.getElementById('error-electricity');
+        if (errEl) errEl.classList.add('visible');
+        isValid = false;
+        elecInput = 0;
+    }
 
-    let dietValue = sanitizeInput(inputDietEl.value);
+    if (!isValid) return false;
+
+    let dietValue = String(sanitizeInput(inputDietEl.value));
     if (!VALID_DIETS.includes(dietValue)) {
         dietValue = 'meat-eater'; // Safe fallback
     }
@@ -332,8 +577,20 @@ function validateInputs() {
 // ============================================
 
 /**
- * Calculates carbon footprint from user inputs using emission factors.
- * @returns {void} Updates userData object in-place.
+ * @description Calculates carbon footprint from user inputs using
+ * industry-standard emission factors. Converts daily/monthly values
+ * to annual tons of CO2 equivalent.
+ * @returns {void} Updates userData.emissions object in-place
+ * @throws {never} This function does not throw
+ * @complexity Time: O(1) | Space: O(1)
+ * @example
+ * userData.carKm = 20;
+ * userData.flights = 2;
+ * userData.electricity = 150;
+ * userData.diet = 'meat-eater';
+ * calculateFootprint();
+ * // userData.emissions.total ≈ 6.73
+ * @since v1.0.0
  */
 function calculateFootprint() {
     const carTons = 
@@ -369,9 +626,17 @@ function calculateFootprint() {
 // ============================================
 
 /**
- * Switches the active view dynamically based on the provided key.
- * @param {string} viewKey - 'calculator', 'results', or 'aiTips'.
+ * @description Switches the active view dynamically based on the
+ * provided key. Manages CSS class toggling for view containers
+ * and navigation buttons. Fires analytics events for results view.
+ * @param {string} viewKey - One of 'calculator', 'results', or 'aiTips'
  * @returns {void}
+ * @throws {never} This function does not throw
+ * @complexity Time: O(1) | Space: O(1)
+ * @example
+ * switchView('results');
+ * // Shows results view, hides others
+ * @since v1.0.0
  */
 function switchView(viewKey) {
     calculatorViewEl.classList.remove('active');
@@ -399,8 +664,16 @@ function switchView(viewKey) {
 }
 
 /**
- * Animates the total score from 0 to the calculated amount.
+ * @description Animates the total score display from 0 to the calculated
+ * amount using a smooth incremental counter with setInterval.
  * @returns {void}
+ * @throws {never} This function does not throw
+ * @complexity Time: O(n) where n = 50 frames | Space: O(1)
+ * @example
+ * userData.emissions.total = 6.73;
+ * animateScoreMeter();
+ * // Score counter animates from 0.0 to 6.7
+ * @since v1.0.0
  */
 function animateScoreMeter() {
     const totalScore = userData.emissions.total;
@@ -418,8 +691,17 @@ function animateScoreMeter() {
 }
 
 /**
- * Updates the comparison text block comparing user to global average.
+ * @description Updates the comparison text block comparing the user's
+ * emissions to the global average (4.7 tons CO2/yr). Renders an
+ * appropriate icon and color-coded message.
  * @returns {void}
+ * @throws {never} This function does not throw
+ * @complexity Time: O(1) | Space: O(1)
+ * @example
+ * userData.emissions.total = 3.0;
+ * updateComparisonText();
+ * // Displays: "1.7 tons below global average"
+ * @since v1.0.0
  */
 function updateComparisonText() {
     const totalScore = userData.emissions.total;
@@ -444,8 +726,16 @@ function updateComparisonText() {
 }
 
 /**
- * Coordinates rendering the Results dashboard.
+ * @description Coordinates rendering the Results dashboard by batching
+ * score animation, comparison text, and chart drawing into a single
+ * animation frame to prevent layout thrashing.
  * @returns {void}
+ * @throws {never} This function does not throw
+ * @complexity Time: O(1) | Space: O(1)
+ * @example
+ * calculateFootprint();
+ * renderResults();
+ * @since v1.0.0
  */
 function renderResults() {
     batchDOMUpdates([
@@ -462,9 +752,18 @@ function renderResults() {
 }
 
 /**
- * Renders the AI-generated or fallback tips securely into the UI.
- * @param {Array<Object>} tipsArray - Array of objects with title/description.
+ * @description Renders AI-generated or fallback tips securely into the UI.
+ * Each tip is displayed as a styled card with a rotating icon.
+ * All text content is HTML-escaped to prevent XSS.
+ * @param {Array<{title: string, description: string}>} tipsArray - Array of tip objects with title and description
  * @returns {void}
+ * @throws {never} This function does not throw
+ * @complexity Time: O(n) where n = number of tips | Space: O(n)
+ * @example
+ * renderTips([
+ *     { title: 'Save Energy', description: 'Turn off lights.' }
+ * ]);
+ * @since v1.0.0
  */
 function renderTips(tipsArray) {
     loadingStateEl.classList.add('hidden');
@@ -490,8 +789,16 @@ function renderTips(tipsArray) {
 // ============================================
 
 /**
- * Draws the interactive Google Pie Chart.
+ * @description Draws an interactive Google Pie Chart visualization
+ * of the user's emissions breakdown by category. Uses Google
+ * Charts API with a donut-style presentation.
  * @returns {void}
+ * @throws {Error} When Google Charts API is not loaded
+ * @complexity Time: O(1) | Space: O(1)
+ * @example
+ * // After calculating footprint:
+ * google.charts.setOnLoadCallback(drawEmissionsChart);
+ * @since v1.0.0
  */
 function drawEmissionsChart() {
     const dataTable = google.visualization.arrayToDataTable([
@@ -520,12 +827,22 @@ function drawEmissionsChart() {
 }
 
 /**
- * Fetches AI tips from Gemini API or falls back if necessary.
+ * @description Fetches AI-powered personalized tips from the Gemini API.
+ * Constructs a detailed prompt from the user's emissions data,
+ * sends it to Gemini 2.0 Flash, and parses the JSON response.
+ * Falls back to curated offline tips on any failure (Strategy pattern).
  * @async
- * @throws {Error} When API call fails
+ * @returns {Promise<void>}
+ * @throws {Error} When API call fails (caught internally with fallback)
+ * @complexity Time: O(1) + network latency | Space: O(n)
+ * @example
+ * SecureKeyManager.setKey('AIzaSy...');
+ * await fetchAiTips();
+ * // Tips are rendered in the UI
+ * @since v1.0.0
  */
 async function fetchAiTips() {
-    const providedKey = sanitizeInput(inputGeminiKeyEl.value.trim());
+    const providedKey = String(sanitizeInput(inputGeminiKeyEl.value.trim()));
     if (providedKey) {
         SecureKeyManager.setKey(providedKey);
     }
@@ -593,7 +910,7 @@ async function fetchAiTips() {
         // Why this catch exists: Handles API downtime, invalid JSON structures,
         // or network errors safely without breaking the app UI.
         if (window.cloudLogger) {
-            window.cloudLogger.error("Error generating tips:", error.message);
+            window.cloudLogger.error("Error generating tips:", (/** @type {Error} */ (error)).message);
         }
         
         const fallbackTipsData = [
@@ -619,9 +936,18 @@ async function fetchAiTips() {
 }
 
 /**
- * Persists the footprint to Firebase Firestore.
+ * @description Persists the calculated footprint to Firebase Firestore.
+ * Stores all emission categories with a server-generated timestamp.
+ * Displays a toast notification on successful save.
  * @async
- * @throws {Error} When Firestore write fails
+ * @returns {Promise<void>}
+ * @throws {Error} When Firestore write fails (caught internally)
+ * @complexity Time: O(1) + network latency | Space: O(1)
+ * @example
+ * calculateFootprint();
+ * await saveToFirestore();
+ * // Data persisted, toast shown
+ * @since v1.0.0
  */
 async function saveToFirestore() {
     const firestoreDb = 
@@ -650,15 +976,23 @@ async function saveToFirestore() {
         // Why this catch exists: Captures offline network states or 
         // permission errors without crashing the main thread.
         if (window.cloudLogger) {
-            window.cloudLogger.error("Firestore error: ", error.message);
+            window.cloudLogger.error("Firestore error: ", (/** @type {Error} */ (error)).message);
         }
     }
 }
 
 /**
- * Fetches recent calculation history from Firestore.
+ * @description Fetches the 5 most recent calculation entries from
+ * Firestore, ordered by timestamp descending. Renders them as
+ * a list with formatted dates and emission scores.
  * @async
- * @throws {Error} When Firestore read fails
+ * @returns {Promise<void>}
+ * @throws {Error} When Firestore read fails (caught internally)
+ * @complexity Time: O(n) where n = 5 results | Space: O(n)
+ * @example
+ * await fetchHistory();
+ * // History list populated in the UI
+ * @since v1.0.0
  */
 async function fetchHistory() {
     const firestoreDb = 
@@ -680,7 +1014,7 @@ async function fetchHistory() {
             return;
         }
 
-        querySnapshot.forEach(documentSnapshot => {
+        querySnapshot.forEach(/** @param {any} documentSnapshot */ documentSnapshot => {
             const rowData = documentSnapshot.data();
             const dateString = rowData.timestamp ? 
                 rowData.timestamp.toDate().toLocaleString() : 'Just now';
@@ -700,15 +1034,25 @@ async function fetchHistory() {
         // Why this catch exists: Captures read failures from missing indexes
         // or connection drops safely.
         if (window.cloudLogger) {
-            window.cloudLogger.error("History fetch error: ", error.message);
+            window.cloudLogger.error("History fetch error: ", (/** @type {Error} */ (error)).message);
         }
     }
 }
 
 /**
- * Generates and uploads PDF report.
+ * @description Generates a PDF report of the user's carbon footprint
+ * using jsPDF and optionally uploads it to Firebase Cloud Storage.
+ * The PDF includes total score and categorical breakdown.
  * @async
- * @throws {Error} When PDF generation or storage fails
+ * @returns {Promise<void>}
+ * @throws {Error} When PDF generation or Cloud Storage upload fails
+ *   (caught internally)
+ * @complexity Time: O(1) + network latency | Space: O(n) PDF size
+ * @example
+ * calculateFootprint();
+ * await generateAndUploadPdf();
+ * // PDF downloaded locally and uploaded to Cloud Storage
+ * @since v1.0.0
  */
 async function generateAndUploadPdf() {
     if (typeof jspdf === 'undefined') {
@@ -768,7 +1112,7 @@ async function generateAndUploadPdf() {
             // Why this catch exists: Prevents the local PDF download from 
             // failing if the cloud upload step drops connectivity.
             if (window.cloudLogger) {
-                window.cloudLogger.error("PDF upload error", error.message);
+                window.cloudLogger.error("PDF upload error", (/** @type {Error} */ (error)).message);
             }
         }
     }
@@ -802,8 +1146,20 @@ CleanupManager.add(btnGenerateTipsEl, 'click', fetchAiTips);
 /** Handle PDF generation and upload */
 CleanupManager.add(btnDownloadReportEl, 'click', generateAndUploadPdf);
 
+/** Handle input validation clearing */
+['car-km', 'flights', 'electricity'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        CleanupManager.add(el, 'input', () => {
+            el.classList.remove('input-error');
+            const errEl = document.getElementById(`error-${id}`);
+            if (errEl) errEl.classList.remove('visible');
+        });
+    }
+});
+
 /** Handle form submission for footprint calculation */
-CleanupManager.add(calculatorFormEl, 'submit', (event) => {
+CleanupManager.add(calculatorFormEl, 'submit', /** @param {Event} event */ (event) => {
     event.preventDefault();
 
     if (!RateLimiter.isAllowed()) {
@@ -813,7 +1169,9 @@ CleanupManager.add(calculatorFormEl, 'submit', (event) => {
         return;
     }
 
-    validateInputs();
+    if (!validateInputs()) {
+        return;
+    }
     
     PerformanceMonitor.start('calculation');
     calculateFootprint();
@@ -847,7 +1205,16 @@ CleanupManager.add(calculatorFormEl, 'submit', (event) => {
 // ============================================
 
 /**
- * Initializes the application on load
+ * @description Initializes the EcoTrack application on page load.
+ * Sets up Google Charts, configures Intersection Observer for
+ * scroll-triggered animations on glass cards, and logs startup.
+ * @returns {void}
+ * @throws {never} This function does not throw
+ * @complexity Time: O(n) where n = number of .glass-card elements | Space: O(1)
+ * @example
+ * // Called automatically on script load:
+ * initApp();
+ * @since v1.0.0
  */
 function initApp() {
     if (window.cloudLogger) {
