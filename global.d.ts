@@ -8,6 +8,8 @@ interface Window {
     firebase: any;
     gtag: (...args: any[]) => void;
     jspdf: any;
+    confetti: any;
+    togglePledge: (element: HTMLElement) => void;
 }
 
 interface ExtendableEvent extends Event {

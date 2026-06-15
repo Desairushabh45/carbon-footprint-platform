@@ -44,12 +44,8 @@
  */
 
 /**
- * Freeze built-in prototypes to prevent
- * prototype pollution attacks
+ * Built-in prototypes intentionally not frozen to support Google Charts
  */
-Object.freeze(Object.prototype);
-Object.freeze(Array.prototype);
-Object.freeze(String.prototype);
 
 /**
  * @description Generate cryptographically secure session ID.
@@ -755,9 +751,9 @@ function renderResults() {
     batchDOMUpdates([
         () => animateScoreMeter(),
         () => updateComparisonText(),
-        () => renderImpactMetrics(),
-        () => renderComparisonCards(),
-        () => renderPledges(),
+        () => { if (impactMetricsEl) renderImpactMetrics(); },
+        () => { if (worldComparisonEl) renderComparisonCards(); },
+        () => { if (pledgesSectionEl) renderPledges(); },
         () => {
             if (typeof google !== 'undefined' && google.visualization) {
                 drawEmissionsChart();
@@ -918,12 +914,12 @@ function renderPledges() {
  * @description Toggles pledge selection and shows confetti.
  * @param {HTMLElement} element 
  */
-function togglePledge(element) {
+window.togglePledge = function(element) {
     const isActive = element.classList.contains('active');
     if (!isActive) {
         element.classList.add('active');
-        if (typeof /** @type {any} */ (window).confetti === 'function') {
-            /** @type {any} */ (window).confetti({
+        if (typeof window.confetti === 'function') {
+            window.confetti({
                 particleCount: 100,
                 spread: 70,
                 origin: { y: 0.6 }
