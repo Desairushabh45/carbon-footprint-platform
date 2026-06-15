@@ -111,7 +111,7 @@ function injectTestModal() {
             .pass { color: #22c55e; }
             .fail { color: #ef4444; }
         </style>
-        <button id="open-tests-btn" class="test-btn">Run Tests</button>
+        <button id="open-tests-btn" class="test-btn" aria-label="Run automated test suite">Run Tests</button>
         <div id="test-modal-overlay" class="test-modal">
             <div class="test-header">
                 <h2 id="test-score-title">Test Results</h2>

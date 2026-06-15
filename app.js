@@ -652,21 +652,27 @@ function switchView(viewKey) {
     tipsViewEl.classList.remove('active');
 
     navCalcEl.classList.remove('active');
+    navCalcEl.removeAttribute('aria-current');
     navResultsEl.classList.remove('active');
+    navResultsEl.removeAttribute('aria-current');
     navTipsEl.classList.remove('active');
+    navTipsEl.removeAttribute('aria-current');
 
     if (viewKey === 'calculator') {
         calculatorViewEl.classList.add('active');
         navCalcEl.classList.add('active');
+        navCalcEl.setAttribute('aria-current', 'page');
         navCalcEl.disabled = false;
     } else if (viewKey === 'results') {
         resultsViewEl.classList.add('active');
         navResultsEl.classList.add('active');
+        navResultsEl.setAttribute('aria-current', 'page');
         navResultsEl.disabled = false;
         if (typeof gtag === 'function') gtag('event', 'view_results');
     } else if (viewKey === 'aiTips') {
         tipsViewEl.classList.add('active');
         navTipsEl.classList.add('active');
+        navTipsEl.setAttribute('aria-current', 'page');
         navTipsEl.disabled = false;
     }
 }
@@ -1001,6 +1007,17 @@ function drawEmissionsChart() {
 
     const pieChart = new google.visualization.PieChart(emissionsChartEl);
     pieChart.draw(dataTable, chartOptions);
+    
+    // Populate SR-only table for accessibility
+    const tbody = document.getElementById('emissions-table-body');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr><td>Transport</td><td>${userData.emissions.car.toFixed(2)}</td></tr>
+            <tr><td>Air Travel</td><td>${userData.emissions.flights.toFixed(2)}</td></tr>
+            <tr><td>Home Energy</td><td>${userData.emissions.electricity.toFixed(2)}</td></tr>
+            <tr><td>Diet</td><td>${userData.emissions.diet.toFixed(2)}</td></tr>
+        `;
+    }
 }
 
 /**
