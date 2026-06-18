@@ -19,7 +19,7 @@
  * @description Versioned cache identifier for cache busting on updates
  * @since v2.0.0
  */
-const CACHE_NAME = 'ecotrack-v2';
+const CACHE_NAME = 'ecotrack-v3';
 
 /**
  * @constant {Array<string>} CACHED_URLS
