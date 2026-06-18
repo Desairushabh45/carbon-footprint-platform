@@ -38,6 +38,9 @@
 /**
  * @fileoverview EcoTrack - Carbon Footprint Awareness Platform
  * @author Rushabh Desai
+ * @module app.js
+ * @author Rushabh Desai
+ * @license MIT
  * @version 2.1.0
  * @description Main application logic handling carbon footprint calculations,
  * Google Services integration, UI rendering, and security.
@@ -61,7 +64,7 @@ const SESSION_ID = crypto.getRandomValues(new Uint8Array(16)).join('-');
 // ============================================
 
 /** @constant {number} Global average CO2 tons/yr */
-const GLOBAL_AVERAGE_TONS = 4.7;
+const GLOBAL_AVERAGE_TONS = BENCHMARKS.GLOBAL_AVERAGE;
 
 /** @constant {number} Cooldown between calculations in milliseconds */
 const CALCULATION_COOLDOWN_MS = 2000;
@@ -89,14 +92,14 @@ const EMISSION_FACTORS = {
     ELECTRICITY_KG_PER_KWH: 0.85,
     /** tons CO2 per year by diet type */
     DIET_TONS: {
-        vegan: 1.5,
-        vegetarian: 1.7,
-        'meat-eater': 3.3
+        [DIET_TYPES.VEGAN]: 1.5,
+        [DIET_TYPES.VEGETARIAN]: 1.7,
+        [DIET_TYPES.MEAT_EATER]: 3.3
     }
 };
 
 /** @constant {Array<string>} Valid diet options */
-const VALID_DIETS = ['vegan', 'vegetarian', 'meat-eater'];
+const VALID_DIETS = [DIET_TYPES.VEGAN, DIET_TYPES.VEGETARIAN, DIET_TYPES.MEAT_EATER];
 
 /** @constant {Object} Input validation limits */
 const INPUT_LIMITS = {
@@ -271,7 +274,7 @@ const navTipsEl = /** @type {HTMLButtonElement} */ (document.getElementById('nav
 /** @type {HTMLFormElement} */
 const calculatorFormEl = /** @type {HTMLFormElement} */ (document.getElementById('calculator-form'));
 /** @type {HTMLInputElement} */
-const inputCarKmEl = /** @type {HTMLInputElement} */ (document.getElementById('car-km'));
+const inputCarEl = /** @type {HTMLInputElement} */ (document.getElementById('car-km'));
 /** @type {HTMLInputElement} */
 const inputFlightsEl = /** @type {HTMLInputElement} */ (document.getElementById('flights'));
 /** @type {HTMLInputElement} */
@@ -335,6 +338,19 @@ const pledgesContainerEl = /** @type {HTMLElement} */ (document.getElementById('
  * // Returns: 42
  * @since v1.0.0
  */
+/**
+ * Gets Firestore instance safely
+ * @returns {Object|null} Firestore instance
+ * @complexity Time: O(1) | Space: O(1)
+ */
+function getFirestoreInstance() {
+  if (typeof firebase === 'undefined') {
+    window.cloudLogger && window.cloudLogger.warn('Firestore', 'Firebase not initialized');
+    return null;
+  }
+  return firebase.firestore();
+}
+
 function sanitizeInput(value) {
     if (typeof value === 'string') {
         return value
@@ -513,12 +529,33 @@ const CleanupManager = {
  * // userData is now populated with sanitized values
  * @since v1.0.0
  */
+/**
+ * Validates single numeric input field
+ * @param {HTMLElement} inputEl - Input element
+ * @param {HTMLElement} errEl - Error element
+ * @param {number} min - Minimum value
+ * @param {number} max - Maximum value
+ * @param {string} fieldName - Field label
+ * @returns {boolean} Whether input is valid
+ * @complexity Time: O(1) | Space: O(1)
+ */
+function validateNumericField(inputEl, errEl, min, max, fieldName) {
+  const value = Math.max(0, parseFloat(sanitizeInput(inputEl.value)) || 0);
+  const isValid = Number.isFinite(value) && value >= min && value <= max;
+  inputEl.classList.toggle('input-error', !isValid);
+  if (errEl) {
+      errEl.classList.toggle('visible', !isValid);
+      if (!isValid) errEl.textContent = `⚠️ ${fieldName} must be between ${min} and ${max}`;
+  }
+  return isValid;
+}
+
 function validateInputs() {
     let isValid = true;
 
     // Reset previous errors
     const inputs = [
-        { el: inputCarKmEl, errId: 'error-car-km' },
+        { el: inputCarEl, errId: 'error-car-km' },
         { el: inputFlightsEl, errId: 'error-flights' },
         { el: inputElectricityEl, errId: 'error-electricity' }
     ];
@@ -529,7 +566,7 @@ function validateInputs() {
         if (errEl) errEl.classList.remove('visible');
     });
 
-    let carInputStr = sanitizeInput(inputCarKmEl.value).toString().slice(0, 4);
+    let carInputStr = sanitizeInput(inputCarEl.value).toString().slice(0, 4);
     let flightInputStr = sanitizeInput(inputFlightsEl.value).toString().slice(0, 3);
     let elecInputStr = sanitizeInput(inputElectricityEl.value).toString().slice(0, 5);
 
@@ -538,7 +575,7 @@ function validateInputs() {
     let elecInput = parseFloat(elecInputStr);
 
     if (!Number.isFinite(carInput) || Number.isNaN(carInput) || carInput < 0 || carInput > 2000) {
-        inputCarKmEl.classList.add('input-error');
+        inputCarEl.classList.add('input-error');
         const errEl = document.getElementById('error-car-km');
         if (errEl) errEl.classList.add('visible');
         isValid = false;
@@ -565,7 +602,7 @@ function validateInputs() {
 
     let dietValue = String(sanitizeInput(inputDietEl.value));
     if (!VALID_DIETS.includes(dietValue)) {
-        dietValue = 'meat-eater'; // Safe fallback
+        dietValue = DIET_TYPES.MEAT_EATER; // Safe fallback
     }
 
     userData.carKm = Math.max(0, carInput);
@@ -588,10 +625,10 @@ function validateInputs() {
  * @throws {never} This function does not throw
  * @complexity Time: O(1) | Space: O(1)
  * @example
- * userData.carKm = 20;
+ * userData.carKm = ANIMATION.SCORE_INTERVAL_MS;
  * userData.flights = 2;
  * userData.electricity = 150;
- * userData.diet = 'meat-eater';
+ * userData.diet = DIET_TYPES.MEAT_EATER;
  * calculateFootprint();
  * // userData.emissions.total ≈ 6.73
  * @since v1.0.0
@@ -608,12 +645,12 @@ function calculateFootprint() {
          EMISSION_FACTORS.ELECTRICITY_KG_PER_KWH) / 1000;
 
     let dietTons = 0;
-    if (userData.diet === 'vegan') {
+    if (userData.diet === DIET_TYPES.VEGAN) {
         dietTons = EMISSION_FACTORS.DIET_TONS.vegan;
-    } else if (userData.diet === 'vegetarian') {
+    } else if (userData.diet === DIET_TYPES.VEGETARIAN) {
         dietTons = EMISSION_FACTORS.DIET_TONS.vegetarian;
     } else {
-        dietTons = EMISSION_FACTORS.DIET_TONS['meat-eater'];
+        dietTons = EMISSION_FACTORS.DIET_TONS[DIET_TYPES.MEAT_EATER];
     }
 
     userData.emissions = {
@@ -633,12 +670,12 @@ function calculateFootprint() {
  * @description Switches the active view dynamically based on the
  * provided key. Manages CSS class toggling for view containers
  * and navigation buttons. Fires analytics events for results view.
- * @param {string} viewKey - One of 'calculator', 'results', or 'aiTips'
+ * @param {string} viewKey - One of VIEWS.CALCULATOR, VIEWS.RESULTS, or VIEWS.AI_TIPS
  * @returns {void}
  * @throws {never} This function does not throw
  * @complexity Time: O(1) | Space: O(1)
  * @example
- * switchView('results');
+ * switchView(VIEWS.RESULTS);
  * // Shows results view, hides others
  * @since v1.0.0
  */
@@ -654,18 +691,18 @@ function switchView(viewKey) {
     navTipsEl.classList.remove('active');
     navTipsEl.removeAttribute('aria-current');
 
-    if (viewKey === 'calculator') {
+    if (viewKey === VIEWS.CALCULATOR) {
         calculatorViewEl.classList.add('active');
         navCalcEl.classList.add('active');
         navCalcEl.setAttribute('aria-current', 'page');
         navCalcEl.disabled = false;
-    } else if (viewKey === 'results') {
+    } else if (viewKey === VIEWS.RESULTS) {
         resultsViewEl.classList.add('active');
         navResultsEl.classList.add('active');
         navResultsEl.setAttribute('aria-current', 'page');
         navResultsEl.disabled = false;
         if (typeof gtag === 'function') gtag('event', 'view_results');
-    } else if (viewKey === 'aiTips') {
+    } else if (viewKey === VIEWS.AI_TIPS) {
         tipsViewEl.classList.add('active');
         navTipsEl.classList.add('active');
         navTipsEl.setAttribute('aria-current', 'page');
@@ -678,7 +715,7 @@ function switchView(viewKey) {
  * amount using a smooth incremental counter with setInterval.
  * @returns {void}
  * @throws {never} This function does not throw
- * @complexity Time: O(n) where n = 50 frames | Space: O(1)
+ * @complexity Time: O(n) where n = ANIMATION.SCORE_STEPS frames | Space: O(1)
  * @example
  * userData.emissions.total = 6.73;
  * animateScoreMeter();
@@ -688,7 +725,7 @@ function switchView(viewKey) {
 function animateScoreMeter() {
     const totalScore = userData.emissions.total;
     let currentScore = 0;
-    const increment = totalScore / 50;
+    const increment = totalScore / ANIMATION.SCORE_STEPS;
     
     const animationInterval = setInterval(() => {
         currentScore += increment;
@@ -697,12 +734,12 @@ function animateScoreMeter() {
             clearInterval(animationInterval);
         }
         totalScoreEl.textContent = currentScore.toFixed(1);
-    }, 20);
+    }, ANIMATION.SCORE_INTERVAL_MS);
 }
 
 /**
  * @description Updates the comparison text block comparing the user's
- * emissions to the global average (4.7 tons CO2/yr). Renders an
+ * emissions to the global average (BENCHMARKS.GLOBAL_AVERAGE tons CO2/yr). Renders an
  * appropriate icon and color-coded message.
  * @returns {void}
  * @throws {never} This function does not throw
@@ -771,10 +808,10 @@ function renderImpactMetrics() {
     if (!impactMetricsEl) return;
     const total = userData.emissions.total;
     
-    const trees = Math.round(total * 45);
-    const driving = Math.round(total * 6000);
-    const phones = Math.round(total * 121000);
-    const cost = (total * 15).toFixed(2);
+    const trees = Math.round(total * IMPACT_FACTORS.TREES_PER_TON);
+    const driving = Math.round(total * IMPACT_FACTORS.KM_PER_TON);
+    const phones = Math.round(total * IMPACT_FACTORS.SMARTPHONES_PER_TON);
+    const cost = (total * IMPACT_FACTORS.COST_PER_TON_USD).toFixed(2);
     
     impactMetricsEl.innerHTML = `
         <div class="metric-card">
@@ -808,10 +845,10 @@ function renderComparisonCards() {
     const total = userData.emissions.total;
     
     const benchmarks = [
-        { name: "India Average", target: 1.9 },
-        { name: "Global Average", target: 4.7 },
-        { name: "Paris Target", target: 2.0 },
-        { name: "USA Average", target: 14.2 }
+        { name: "India Average", target: BENCHMARKS.INDIA_AVERAGE },
+        { name: "Global Average", target: BENCHMARKS.GLOBAL_AVERAGE },
+        { name: "Paris Target", target: BENCHMARKS.PARIS_TARGET },
+        { name: "USA Average", target: BENCHMARKS.USA_AVERAGE }
     ];
     
     let html = '';
@@ -858,12 +895,12 @@ function renderPledges() {
     
     // 1. Car reduction
     if (userData.carKm > 0) {
-        const carSave = (userData.emissions.car * 0.20).toFixed(2);
+        const carSave = (userData.emissions.car * PLEDGE_FACTORS.CAR_REDUCTION).toFixed(2);
         html += `
             <div class="pledge-card" onclick="togglePledge(this)">
                 <div class="pledge-header">
                     <div class="pledge-checkbox"></div>
-                    <div>I will reduce car usage by 20%</div>
+                    <div>I will reduce car usage by ANIMATION.SCORE_INTERVAL_MS%</div>
                 </div>
                 <div class="pledge-saving">-${carSave} tons CO₂/yr</div>
                 <div class="pledge-message">Walk, bike, or use transit.</div>
@@ -872,7 +909,7 @@ function renderPledges() {
     }
     
     // 2. Diet change
-    if (userData.diet === 'meat-eater') {
+    if (userData.diet === DIET_TYPES.MEAT_EATER) {
         const dietSave = (userData.emissions.diet - 1.7).toFixed(2);
         if (parseFloat(dietSave) > 0) {
             html += `
@@ -890,7 +927,7 @@ function renderPledges() {
     
     // 3. Renewable energy
     if (userData.electricity > 0) {
-        const elecSave = (userData.emissions.electricity * 0.80).toFixed(2);
+        const elecSave = (userData.emissions.electricity * PLEDGE_FACTORS.ENERGY_REDUCTION).toFixed(2);
         html += `
             <div class="pledge-card" onclick="togglePledge(this)">
                 <div class="pledge-header">
@@ -920,9 +957,9 @@ window.togglePledge = function(element) {
         element.classList.add('active');
         if (typeof window.confetti === 'function') {
             window.confetti({
-                particleCount: 100,
-                spread: 70,
-                origin: { y: 0.6 }
+                particleCount: CONFETTI.PARTICLE_COUNT,
+                spread: CONFETTI.SPREAD,
+                origin: { y: CONFETTI.ORIGIN_Y }
             });
         }
     } else {
@@ -1001,8 +1038,8 @@ function drawEmissionsChart() {
         pieSliceTextStyle: { color: 'white', fontName: 'Outfit' }
     };
 
-    const pieChart = new google.visualization.PieChart(emissionsChartEl);
-    pieChart.draw(dataTable, chartOptions);
+    const emissionsChartEl_shadow = new google.visualization.PieChart(emissionsChartEl);
+    emissionsChartEl_shadow.draw(dataTable, chartOptions);
     
     // Populate SR-only table for accessibility
     const tbody = document.getElementById('emissions-table-body');
@@ -1019,7 +1056,7 @@ function drawEmissionsChart() {
 /**
  * @description Fetches AI-powered personalized tips from the Gemini API.
  * Constructs a detailed prompt from the user's emissions data,
- * sends it to Gemini 2.0 Flash, and parses the JSON response.
+ * sends it to Gemini BENCHMARKS.PARIS_TARGET Flash, and parses the JSON response.
  * Falls back to curated offline tips on any failure (Strategy pattern).
  * @async
  * @returns {Promise<void>}
@@ -1072,7 +1109,7 @@ async function fetchAiTips() {
     try {
         const fetchResponse = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/` +
-            `models/gemini-2.0-flash:generateContent?key=${activeKey}`, 
+            `models/gemini-BENCHMARKS.PARIS_TARGET-flash:generateContent?key=${activeKey}`, 
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1141,12 +1178,12 @@ async function fetchAiTips() {
  */
 async function saveToFirestore() {
     const firestoreDb = 
-        typeof firebase !== 'undefined' ? firebase.firestore() : null;
+        getFirestoreInstance();
         
     if (!firestoreDb) return;
 
     try {
-        await firestoreDb.collection("calculations").add({
+        await firestoreDb.collection(DB_COLLECTIONS.CALCULATIONS).add({
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             totalEmissions: userData.emissions.total,
             carEmissions: userData.emissions.car,
@@ -1186,12 +1223,12 @@ async function saveToFirestore() {
  */
 async function fetchHistory() {
     const firestoreDb = 
-        typeof firebase !== 'undefined' ? firebase.firestore() : null;
+        getFirestoreInstance();
         
     if (!firestoreDb) return;
 
     try {
-        const querySnapshot = await firestoreDb.collection("calculations")
+        const querySnapshot = await firestoreDb.collection(DB_COLLECTIONS.CALCULATIONS)
             .orderBy("timestamp", "desc")
             .limit(5)
             .get();
@@ -1256,18 +1293,18 @@ async function generateAndUploadPdf() {
     const documentPdf = new jsPDF();
 
     documentPdf.setFontSize(22);
-    documentPdf.text("EcoTrack Carbon Report", 20, 20);
+    documentPdf.text(PDF_STRINGS.TITLE, ANIMATION.SCORE_INTERVAL_MS, ANIMATION.SCORE_INTERVAL_MS);
     
     documentPdf.setFontSize(16);
     documentPdf.text(
         `Total Score: ${userData.emissions.total.toFixed(1)} Tons CO2/yr`, 
-        20, 40
+        ANIMATION.SCORE_INTERVAL_MS, 40
     );
 
     documentPdf.setFontSize(12);
-    documentPdf.text("Breakdown:", 20, 60);
+    documentPdf.text("Breakdown:", ANIMATION.SCORE_INTERVAL_MS, 60);
     documentPdf.text(
-        `- Car Travel: ${userData.emissions.car.toFixed(1)} tons`, 30, 70
+        `- Car Travel: ${userData.emissions.car.toFixed(1)} tons`, 30, CONFETTI.SPREAD
     );
     documentPdf.text(
         `- Air Travel: ${userData.emissions.flights.toFixed(1)} tons`, 30, 80
@@ -1280,7 +1317,7 @@ async function generateAndUploadPdf() {
         `- Diet: ${userData.emissions.diet.toFixed(1)} tons`, 30, 100
     );
 
-    documentPdf.text("Thank you for using EcoTrack!", 20, 120);
+    documentPdf.text("Thank you for using EcoTrack!", ANIMATION.SCORE_INTERVAL_MS, 120);
     documentPdf.save("EcoTrack-Report.pdf");
 
     const cloudStorage = 
@@ -1313,21 +1350,21 @@ async function generateAndUploadPdf() {
 // ============================================
 
 /** Handle navigation to Calculator view */
-CleanupManager.add(navCalcEl, 'click', () => switchView('calculator'));
+CleanupManager.add(navCalcEl, 'click', () => switchView(VIEWS.CALCULATOR));
 
 /** Handle navigation to Results view */
-CleanupManager.add(navResultsEl, 'click', () => switchView('results'));
+CleanupManager.add(navResultsEl, 'click', () => switchView(VIEWS.RESULTS));
 
 /** Handle navigation to AI Tips view */
-CleanupManager.add(navTipsEl, 'click', () => switchView('aiTips'));
+CleanupManager.add(navTipsEl, 'click', () => switchView(VIEWS.AI_TIPS));
 
 /** Handle recalculation action */
-CleanupManager.add(btnRecalculateEl, 'click', () => switchView('calculator'));
+CleanupManager.add(btnRecalculateEl, 'click', () => switchView(VIEWS.CALCULATOR));
 
 /** Handle AI tips tab navigation */
 CleanupManager.add(btnGetTipsEl, 'click', () => {
     if (typeof gtag === 'function') gtag('event', 'generate_tips');
-    switchView('aiTips');
+    switchView(VIEWS.AI_TIPS);
 });
 
 /** Handle generating AI tips API call */
@@ -1387,7 +1424,7 @@ CleanupManager.add(calculatorFormEl, 'submit', /** @param {Event} event */ (even
     saveToFirestore();
     fetchHistory();
     
-    switchView('results');
+    switchView(VIEWS.RESULTS);
 });
 
 // ============================================
@@ -1410,6 +1447,21 @@ function initApp() {
     if (window.cloudLogger) {
         window.cloudLogger.info("EcoTrack initialized.");
     }
+
+    // Initialize Firebase safely — fail silently in demo mode without real credentials
+    try {
+        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+            firebase.initializeApp(FIREBASE_CONFIG);
+        }
+    } catch (error) {
+        if (window.cloudLogger) {
+            window.cloudLogger.warn(
+                'Firebase',
+                'Running without Firebase: ' + error.message
+            );
+        }
+    }
+
     // Set initial configuration
     if (typeof google !== 'undefined') {
         google.charts.load('current', {'packages':['corechart']});

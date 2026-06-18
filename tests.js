@@ -12,10 +12,42 @@
  * @description 69 automated tests validating carbon calculations,
  * edge cases, and UI logic. Provides a floating button and modal
  * overlay for visual test result inspection.
+ * @module tests.js
+ * @author Rushabh Desai
+ * @license MIT
  * @version 2.1.0
  */
 
 /** @type {number} Count of passing tests */
+
+const TEST_EMISSION_FACTORS = Object.freeze({
+  CAR_KG_PER_KM: 0.192,
+  DAYS_PER_YEAR: 365,
+  KG_PER_TON: 1000,
+  FLIGHT_KG: 250,
+  ELECTRICITY_MONTHS: 12,
+  ELECTRICITY_KG_PER_KWH: 0.85
+});
+
+const TEST_PLEDGE_FACTORS = Object.freeze({
+  CAR_REDUCTION: 0.20,
+  ENERGY_REDUCTION: 0.80
+});
+
+const TEST_IMPACT_FACTORS = Object.freeze({
+  TREES_PER_TON: 45,
+  KM_PER_TON: 6000,
+  SMARTPHONES_PER_TON: 121000,
+  COST_PER_TON: 15
+});
+
+const TEST_BENCHMARKS = Object.freeze({
+  INDIA: 1.9,
+  GLOBAL: 4.7,
+  PARIS: 2.0,
+  USA: 14.2
+});
+
 let passedTestCount = 0;
 /** @type {number} Count of total tests executed */
 let totalTestCount = 0;
@@ -172,20 +204,20 @@ function renderTestResults() {
  * emission calculations without DOM interaction.
  * @param {number} carVal - Kilometers driven per day
  * @param {number} flightsVal - Number of flights per year
- * @param {number} elecVal - Monthly electricity in kWh
+ * @param {number} electricityVal - Monthly electricity in kWh
  * @param {string} dietType - Diet option string
  * @returns {Object} The calculated emissions state object
  * @throws {Error} Caught internally if calculateFootprint fails
  * @complexity Time: O(1) | Space: O(1)
  * @example
- * const result = getSimulatedEmissions(20, 2, 150, 'vegan');
+ * const result = getSimulatedEmissions(20, 2, 150, DIET_TYPES.VEGAN);
  * // result.total ≈ 3.43
  * @since v1.0.0
  */
-function getSimulatedEmissions(carVal, flightsVal, elecVal, dietType) {
+function getSimulatedEmissions(carVal, flightsVal, electricityVal, dietType) {
     userData.carKm = carVal;
     userData.flights = flightsVal;
-    userData.electricity = elecVal;
+    userData.electricity = electricityVal;
     userData.diet = dietType;
     
     try { 
@@ -208,7 +240,7 @@ function getSimulatedEmissions(carVal, flightsVal, elecVal, dietType) {
  * @complexity Time: O(n) where n = 69 test cases | Space: O(n)
  * @example
  * executeAllTests();
- * console.log(`${passedTestCount}/${totalTestCount} passed`);
+ * window.cloudLogger.info(`${passedTestCount}/${totalTestCount} passed`);
  * @since v1.0.0
  */
 function executeAllTests() {
@@ -224,51 +256,60 @@ function executeAllTests() {
     
     const originalCar = inputCarKmEl ? inputCarKmEl.value : 0;
     const originalFlights = inputFlightsEl ? inputFlightsEl.value : 0;
-    const originalElec = inputElectricityEl ? inputElectricityEl.value : 0;
+    const originalElectricity = inputElectricityEl ? inputElectricityEl.value : 0;
     const originalDiet = inputDietEl ? inputDietEl.value : '';
 
     // 1. CALCULATION TESTS (22 tests)
-    const carTestValues = [0, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
-    carTestValues.forEach(val => {
-        const expectedTons = (val * 365 * 0.192) / 1000;
-        const emissionsData = getSimulatedEmissions(val, 0, 0, '');
-        validateTestCase(
-            `Car emissions for ${val} km`, emissionsData.car, expectedTons
-        );
-    });
+    /**
+     * Runs array of value tests for one category
+     * @param {string} testName - Category name
+     * @param {Array<number>} values - Test values
+     * @param {Function} calculator - Calc function
+     * @param {Function} expected - Expected fn
+     * @returns {void}
+     * @complexity Time: O(n) | Space: O(1)
+     */
+    function runValueTests(testName, values, calculator, expected) {
+        values.forEach(val => {
+            validateTestCase(
+                `${testName} for ${val}`,
+                calculator(val),
+                expected(val)
+            );
+        });
+    }
 
-    const flightTestValues = [0, 1, 2, 5, 10, 20];
-    flightTestValues.forEach(val => {
-        const expectedTons = (val * 250) / 1000;
-        const emissionsData = getSimulatedEmissions(0, val, 0, '');
-        validateTestCase(
-            `Flight emissions for ${val} flights`, 
-            emissionsData.flights, 
-            expectedTons
-        );
-    });
+    runValueTests(
+        'Car emissions',
+        [0, 5, 10, 20, 50, 100, 200, 500, 1000, 2000],
+        val => getSimulatedEmissions(val, 0, 0, '').car,
+        val => (val * TEST_EMISSION_FACTORS.DAYS_PER_YEAR * TEST_EMISSION_FACTORS.CAR_KG_PER_KM) / TEST_EMISSION_FACTORS.KG_PER_TON
+    );
 
-    const electricityTestValues = [0, 50, 100, 150, 200, 500];
-    electricityTestValues.forEach(val => {
-        const expectedTons = (val * 12 * 0.85) / 1000;
-        const emissionsData = getSimulatedEmissions(0, 0, val, '');
-        validateTestCase(
-            `Electricity emissions for ${val} kWh`, 
-            emissionsData.electricity, 
-            expectedTons
-        );
-    });
+    runValueTests(
+        'Flight emissions',
+        [0, 1, 2, 5, 10, 20],
+        val => getSimulatedEmissions(0, val, 0, '').flights,
+        val => (val * TEST_EMISSION_FACTORS.FLIGHT_KG) / TEST_EMISSION_FACTORS.KG_PER_TON
+    );
+
+    runValueTests(
+        'Electricity emissions',
+        [0, 50, 100, 150, 200, 500],
+        val => getSimulatedEmissions(0, 0, val, '').electricity,
+        val => (val * TEST_EMISSION_FACTORS.ELECTRICITY_MONTHS * TEST_EMISSION_FACTORS.ELECTRICITY_KG_PER_KWH) / TEST_EMISSION_FACTORS.KG_PER_TON
+    );
 
     // 2. DIET TESTS (5 tests)
     validateTestCase(
-        `Diet vegan`, getSimulatedEmissions(0, 0, 0, 'vegan').diet, 1.5
+        `Diet vegan`, getSimulatedEmissions(0, 0, 0, DIET_TYPES.VEGAN).diet, 1.5
     );
     validateTestCase(
-        `Diet vegetarian`, getSimulatedEmissions(0, 0, 0, 'vegetarian').diet, 1.7
+        `Diet vegetarian`, getSimulatedEmissions(0, 0, 0, DIET_TYPES.VEGETARIAN).diet, 1.7
     );
     validateTestCase(
         `Diet meat-eater`, 
-        getSimulatedEmissions(0, 0, 0, 'meat-eater').diet, 
+        getSimulatedEmissions(0, 0, 0, DIET_TYPES.MEAT_EATER).diet, 
         3.3
     );
     // Invalid falls back to meat-eater in validation, but purely testing 
@@ -277,7 +318,7 @@ function executeAllTests() {
     // I updated getSimulatedEmissions to bypass validateInputs. 
     // Wait, getSimulatedEmissions directly calls calculateFootprint.
     // In app.js calculateFootprint falls back to meat-eater:
-    // `else { dietTons = EMISSION_FACTORS.DIET_TONS['meat-eater']; }`
+    // `else { dietTons = EMISSION_FACTORS.DIET_TONS[DIET_TYPES.MEAT_EATER]; }`
     validateTestCase(
         `Diet empty`, getSimulatedEmissions(0, 0, 0, '').diet, 3.3
     );
@@ -291,32 +332,32 @@ function executeAllTests() {
     ); // Since diet empty falls back to 3.3
     validateTestCase(
         `Total Only car`, 
-        getSimulatedEmissions(10, 0, 0, 'vegan').total, 
-        getSimulatedEmissions(10, 0, 0, 'vegan').car + 1.5
+        getSimulatedEmissions(10, 0, 0, DIET_TYPES.VEGAN).total, 
+        getSimulatedEmissions(10, 0, 0, DIET_TYPES.VEGAN).car + 1.5
     );
     validateTestCase(
         `Total Only diet vegan`, 
-        getSimulatedEmissions(0, 0, 0, 'vegan').total, 
+        getSimulatedEmissions(0, 0, 0, DIET_TYPES.VEGAN).total, 
         1.5
     );
     
-    const elecSimData = getSimulatedEmissions(0, 0, 100, 'vegan');
+    const elecSimData = getSimulatedEmissions(0, 0, 100, DIET_TYPES.VEGAN);
     validateTestCase(
         `Total Only electricity`, elecSimData.total, elecSimData.electricity + 1.5
     );
     
     validateTestCase(
         `Total Only flights`, 
-        getSimulatedEmissions(0, 2, 0, 'vegan').total, 
+        getSimulatedEmissions(0, 2, 0, DIET_TYPES.VEGAN).total, 
         0.5 + 1.5
     );
     
-    let maxSimData = getSimulatedEmissions(2000, 365, 10000, 'meat-eater');
+    let maxSimData = getSimulatedEmissions(2000, 365, 10000, DIET_TYPES.MEAT_EATER);
     let expectedMax = maxSimData.car + maxSimData.flights + 
                       maxSimData.electricity + maxSimData.diet;
     validateTestCase(`Total maximum values`, maxSimData.total, expectedMax);
 
-    let mixSimData = getSimulatedEmissions(20, 2, 150, 'vegan');
+    let mixSimData = getSimulatedEmissions(20, 2, 150, DIET_TYPES.VEGAN);
     let expectedMix = mixSimData.car + mixSimData.flights + 
                       mixSimData.electricity + mixSimData.diet;
     validateTestCase(`Total Mixed values`, mixSimData.total, expectedMix);
@@ -324,49 +365,49 @@ function executeAllTests() {
     // 4. EDGE CASE TESTS (10 tests)
     validateTestCase(
         `Edge Negative car km`, 
-        getSimulatedEmissions(Math.max(0, -10), 0, 0, 'vegan').car, 0
+        getSimulatedEmissions(Math.max(0, -10), 0, 0, DIET_TYPES.VEGAN).car, 0
     ); 
     validateTestCase(
         `Edge Negative flights`, 
-        getSimulatedEmissions(0, Math.max(0, -5), 0, 'vegan').flights, 0
+        getSimulatedEmissions(0, Math.max(0, -5), 0, DIET_TYPES.VEGAN).flights, 0
     );
     validateTestCase(
         `Edge Negative electricity`, 
-        getSimulatedEmissions(0, 0, Math.max(0, -100), 'vegan').electricity, 0
+        getSimulatedEmissions(0, 0, Math.max(0, -100), DIET_TYPES.VEGAN).electricity, 0
     );
     
     validateTestCase(
         `Edge Decimal flights`, 
-        getSimulatedEmissions(0, 2.5, 0, 'vegan').flights, (2.5 * 250) / 1000
+        getSimulatedEmissions(0, 2.5, 0, DIET_TYPES.VEGAN).flights, (2.5 * 250) / 1000
     );
     
     validateTestCase(
         `Edge Very large numbers`, 
-        getSimulatedEmissions(9999999, 0, 0, 'vegan').car > 0, true
+        getSimulatedEmissions(9999999, 0, 0, DIET_TYPES.VEGAN).car > 0, true
     );
     
     validateTestCase(
         `Edge NaN inputs`, 
-        getSimulatedEmissions(NaN, 0, 0, 'vegan').car || 0, 0
+        getSimulatedEmissions(NaN, 0, 0, DIET_TYPES.VEGAN).car || 0, 0
     );
     
     validateTestCase(
         `Edge Null inputs`, 
-        getSimulatedEmissions(null, 0, 0, 'vegan').car, 0
+        getSimulatedEmissions(null, 0, 0, DIET_TYPES.VEGAN).car, 0
     );
     
     validateTestCase(
         `Edge Undefined inputs`, 
-        getSimulatedEmissions(undefined, 0, 0, 'vegan').car || 0, 0
+        getSimulatedEmissions(undefined, 0, 0, DIET_TYPES.VEGAN).car || 0, 0
     );
     
     validateTestCase(
         `Edge String inputs`, 
-        getSimulatedEmissions("10", 0, 0, 'vegan').car, 
+        getSimulatedEmissions("10", 0, 0, DIET_TYPES.VEGAN).car, 
         (10 * 365 * 0.192) / 1000
     );
     
-    let floatPrecisionSim = getSimulatedEmissions(3.333333, 0, 0, 'vegan').car;
+    let floatPrecisionSim = getSimulatedEmissions(3.333333, 0, 0, DIET_TYPES.VEGAN).car;
     validateTestCase(
         `Edge Float precision`, isNaN(floatPrecisionSim), false
     );
@@ -397,7 +438,7 @@ function executeAllTests() {
     }
 
     validateTestCase(`Compare Total 3.0`, mockComparisonCheck(3.0), "below");
-    validateTestCase(`Compare Total 4.7`, mockComparisonCheck(4.7), "Equal");
+    validateTestCase(`Compare Total 4.7`, mockComparisonCheck(TEST_BENCHMARKS.GLOBAL), "Equal");
     validateTestCase(`Compare Total 6.0`, mockComparisonCheck(6.0), "above");
     validateTestCase(`Compare Total 0.0`, mockComparisonCheck(0.0), "below");
     validateTestCase(`Compare Total 10.0`, mockComparisonCheck(10.0), "above");
@@ -453,10 +494,10 @@ function executeAllTests() {
     }
 
     // 7. NEW FEATURE TESTS (10 tests)
-    validateTestCase(`Impact metrics - trees calculation`, Math.round(6.0 * 45), 270);
-    validateTestCase(`Impact metrics - driving km`, Math.round(6.0 * 6000), 36000);
-    validateTestCase(`Impact metrics - smartphones`, Math.round(6.0 * 121000), 726000);
-    validateTestCase(`Impact metrics - carbon cost`, (6.0 * 15).toFixed(2), "90.00");
+    validateTestCase(`Impact metrics - trees calculation`, Math.round(6.0 * TEST_IMPACT_FACTORS.TREES_PER_TON), 270);
+    validateTestCase(`Impact metrics - driving km`, Math.round(6.0 * TEST_IMPACT_FACTORS.KM_PER_TON), 36000);
+    validateTestCase(`Impact metrics - smartphones`, Math.round(6.0 * TEST_IMPACT_FACTORS.SMARTPHONES_PER_TON), 726000);
+    validateTestCase(`Impact metrics - carbon cost`, (6.0 * TEST_IMPACT_FACTORS.COST_PER_TON).toFixed(2), "90.00");
 
     if (document.getElementById('world-comparison')) {
         userData.emissions.total = 3.0;
@@ -482,9 +523,9 @@ function executeAllTests() {
         validateTestCase(`Comparison vs Paris target (above)`, true, true);
     }
 
-    validateTestCase(`Pledge savings - car reduction`, (2.0 * 0.20).toFixed(2), "0.40");
+    validateTestCase(`Pledge savings - car reduction`, (2.0 * TEST_PLEDGE_FACTORS.CAR_REDUCTION).toFixed(2), "0.40");
     validateTestCase(`Pledge savings - diet switch`, (3.3 - 1.7).toFixed(2), "1.60");
-    validateTestCase(`Pledge savings - renewable energy`, (2.0 * 0.80).toFixed(2), "1.60");
+    validateTestCase(`Pledge savings - renewable energy`, (2.0 * TEST_PLEDGE_FACTORS.ENERGY_REDUCTION).toFixed(2), "1.60");
 
     let prevTokens = RateLimiter.tokens;
     RateLimiter.tokens = 3;
@@ -499,7 +540,7 @@ function executeAllTests() {
     // Restore DOM
     if (inputCarKmEl) inputCarKmEl.value = originalCar;
     if (inputFlightsEl) inputFlightsEl.value = originalFlights;
-    if (inputElectricityEl) inputElectricityEl.value = originalElec;
+    if (inputElectricityEl) inputElectricityEl.value = originalElectricity;
     if (inputDietEl) inputDietEl.value = originalDiet;
 
     // Load results into UI

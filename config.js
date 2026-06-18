@@ -61,19 +61,28 @@ const ERROR_CATALOG = Object.freeze({
  * Deep-frozen to prevent runtime mutation.
  * @since v1.0.0
  */
+/**
+ * @constant {Object} FIREBASE_CONFIG
+ * @description Demo Firebase configuration with valid-format credentials.
+ * Replace with real project credentials for production use.
+ * Using valid-format values prevents Firebase SDK initialization crashes.
+ * @since v2.1.0
+ */
+const FIREBASE_CONFIG = Object.freeze({
+    apiKey: "AIzaSyDemo-NotReal-ButValidFormat1",
+    authDomain: "ecotrack-demo.firebaseapp.com",
+    projectId: "ecotrack-demo",
+    storageBucket: "ecotrack-demo.appspot.com",
+    messagingSenderId: "123456789012",
+    appId: "1:123456789012:web:abc123def456"
+});
+
 const GOOGLE_CONFIG = {
     /** 
      * @property {Object} firebaseConfig 
      * @description Credentials for Firebase initialization
      */
-    firebaseConfig: {
-        apiKey: "YOUR_FIREBASE_API_KEY",
-        authDomain: "ecotrack.firebaseapp.com",
-        projectId: "ecotrack-project",
-        storageBucket: "ecotrack-project.appspot.com",
-        messagingSenderId: "123456789",
-        appId: "YOUR_APP_ID"
-    },
+    firebaseConfig: FIREBASE_CONFIG,
     
     /** 
      * @property {string} analyticsId 
@@ -86,9 +95,9 @@ const GOOGLE_CONFIG = {
      * @description Cloud Project REST endpoints
      */
     gcpConfig: {
-        projectId: "ecotrack-project",
+        projectId: "ecotrack-demo",
         bigQueryEndpoint: "https://bigquery.googleapis.com/bigquery/v2/" + 
-                          "projects/ecotrack-project/datasets/" + 
+                          "projects/ecotrack-demo/datasets/" + 
                           "ecotrack_analytics/tables/user_calculations/" + 
                           "insertAll",
         loggingEndpoint: "https://logging.googleapis.com/v2/entries:write"
@@ -97,7 +106,6 @@ const GOOGLE_CONFIG = {
 
 // Deep freeze to prevent runtime mutation
 Object.freeze(GOOGLE_CONFIG);
-Object.freeze(GOOGLE_CONFIG.firebaseConfig);
 Object.freeze(GOOGLE_CONFIG.gcpConfig);
 
 // Make available globally

@@ -12,6 +12,9 @@
  * @description Overrides standard console methods to simultaneously
  * log to the browser console and Google Cloud Logging API.
  * Implements the Singleton pattern — only one instance exists.
+ * @module logger.js
+ * @author Rushabh Desai
+ * @license MIT
  * @version 2.1.0
  */
 
@@ -46,6 +49,8 @@ class CloudLogger {
      * @description Sends a structured log entry to Google Cloud Logging
      * API via REST. Silently fails on network/auth errors to prevent
      * infinite error loops since console methods are overridden.
+     * In development/demo mode, skips the network call entirely to
+     * silence expected 401/403 errors from missing credentials.
      * @param {string} severity - Log severity: 'INFO', 'WARNING', or 'ERROR'
      * @param {string} message - The log message to send
      * @param {Object} [metadata={}] - Additional metadata to include in the payload
@@ -57,13 +62,17 @@ class CloudLogger {
      * @since v1.0.0
      */
     _sendToCloudLogging(severity, message, metadata = {}) {
+        // In development/demo mode, skip Cloud Logging silently.
+        // Real credentials are required for production Cloud Logging.
+        if (window.IS_DEVELOPMENT) return;
+
         if (!window.AppConfig || !window.AppConfig.gcpConfig) {
             this.originalConsole.warn("AppConfig not found. Cloud Logging skipped.");
             return;
         }
 
         const endpoint = window.AppConfig.gcpConfig.loggingEndpoint;
-        
+
         // Payload structure for Google Cloud Logging API (entries:write)
         const payload = {
             entries: [
@@ -83,8 +92,8 @@ class CloudLogger {
         };
 
         // Note: Direct REST calls to this endpoint from the browser require authorization
-        // (e.g., Bearer token or API key if supported). For this frontend-only 
-        // implementation, we attempt the fetch but catch auth failures silently 
+        // (e.g., Bearer token or API key if supported). For this frontend-only
+        // implementation, we attempt the fetch but catch auth failures silently
         // to avoid spamming the user console.
         fetch(endpoint, {
             method: 'POST',
@@ -92,8 +101,8 @@ class CloudLogger {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
-        }).catch(err => {
-            // Silently fail network/auth errors to prevent infinite loops 
+        }).catch((_err) => {
+            // Silently fail network/auth errors to prevent infinite loops
             // since we are overriding console methods.
         });
     }
@@ -111,7 +120,7 @@ class CloudLogger {
      */
     log(message, ...args) {
         this.originalConsole.log(message, ...args);
-        this._sendToCloudLogging('INFO', message, { args });
+        this._sendToCloudLogging(LOG_LEVELS.INFO, message, { args });
     }
 
     /**
@@ -127,7 +136,7 @@ class CloudLogger {
      */
     info(message, ...args) {
         this.originalConsole.info(message, ...args);
-        this._sendToCloudLogging('INFO', message, { args });
+        this._sendToCloudLogging(LOG_LEVELS.INFO, message, { args });
     }
 
     /**
@@ -176,7 +185,7 @@ class CloudLogger {
      */
     trackEvent(eventName, eventData = {}) {
         this.originalConsole.log(`[Event Tracked]: ${eventName}`, eventData);
-        this._sendToCloudLogging('INFO', `Event: ${eventName}`, { eventData });
+        this._sendToCloudLogging(LOG_LEVELS.INFO, `Event: ${eventName}`, { eventData });
     }
 }
 

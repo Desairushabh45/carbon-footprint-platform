@@ -76,12 +76,16 @@ async function logToBigQuery(emissionsData) {
             body: JSON.stringify(payload)
         });
 
-        if (!response.ok) {
-            // It will fail without a Bearer token, which is expected in this frontend demo
-            console.warn(`BigQuery log attempt returned: ${response.status} ${response.statusText}`);
-        } else {
-            console.info("Successfully logged to BigQuery.");
-        }
+        if (response.status === 401 || response.status === 403) {
+                // Expected in demo mode — real OAuth credentials needed for production.
+                // Fail silently to avoid console noise.
+                return;
+            } else if (!response.ok) {
+                // It will fail without a Bearer token, which is expected in this frontend demo
+                console.warn(`BigQuery log attempt returned: ${response.status} ${response.statusText}`);
+            } else {
+                console.info("Successfully logged to BigQuery.");
+            }
     } catch (error) {
         console.error("Error logging to BigQuery:", error);
     }
